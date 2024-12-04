@@ -1,0 +1,70 @@
+version: "3"
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.15.0
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "cluster.routing.allocation.disk.threshold_enabled=false"
+    deploy:
+      resources:
+        limits:
+          memory: 1GB
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.15.0
+    ports:
+      - "5601:5601"
+    volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+    environment:
+      - NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+      - NODE_OPTIONS="--max-old-space-size=1024"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    depends_on:
+      - elasticsearch
+
+  filebeat:
+    build:
+      context: ./filebeat
+    container_name: filebeat
+    command: filebeat -e -strict.perms=false
+    volumes:
+      - ./nodejs-logs:/src/logs
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      - elasticsearch
+      - kibana
+
+  nodejs-app:
+    build:
+      context: ./nodejs-app
+      dockerfile: Dockerfile
+    container_name: nodejs-app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./nodejs-logs:/src/logs
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      - elasticsearch
+
+volumes:
+  elasticsearch_data:
+    driver: local
